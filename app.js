@@ -10,6 +10,15 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
+const cors = require('cors');
+var corsOptions = {
+    origin: '*',
+    optionsSuccessStatus: 200,
+    methods: "*",
+    exposedHeaders: ['authorization', 'x', 'y']
+}
+app.use(cors(corsOptions))
+
 /* ===============================
    In-Memory Session Store
    (For Development Only)
