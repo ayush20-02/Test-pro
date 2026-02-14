@@ -85,29 +85,21 @@ function generateCodeChallenge(verifier) {
 //   }
 // };
 
+
 app.get("/auth-url", async (req, res) => {
   try {
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = crypto.randomBytes(16).toString("hex");
+    const state = crypto.randomBytes(16).toString("hex");
 
-  // Store codeVerifier against state
-  sessionStore[state] = codeVerifier;
+    const authUrl =
+      `${process.env.AUTH_URL}?response_type=code` +
+      `&client_id=${process.env.CMIC_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
+      `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
+      `&state=${state}`;
 
-  const authUrl =
-    `${process.env.AUTH_URL}?response_type=code` +
-    `&client_id=${process.env.CMIC_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
-    `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
-    `&state=${state}` +
-    `&code_challenge=${codeChallenge}` +
-    `&code_challenge_method=S256`;
-console.log("authUrl" , authUrl)
-console.log("state" , state)
+    res.json({ authUrl, state });
 
-  res.json({ authUrl, state });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({
       success: 0,
       error: err.message,
@@ -120,14 +112,7 @@ console.log("state" , state)
 =================================*/
 
 app.post("/exchange", async (req, res) => {
-  const { code, state } = req.body;
-
-  const session = sessionStore[state];
-  if (!session) {
-    return res.status(400).json({ error: "Invalid state or expired" });
-  }
-console.log("code" , code)
-console.log("state" , state)
+  const { code } = req.body;
 
   try {
     const tokenResponse = await axios.post(
@@ -135,9 +120,8 @@ console.log("state" , state)
       new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
-        client_secret: process.env.CMIC_CLIENT_SECRET,
+        client_secret: process.env.CMIC_CLIENT_SECRET, // ✅ REQUIRED
         code,
-        code_verifier: session.verifier || session, // supports both formats
         redirect_uri: process.env.CMIC_REDIRECT_URI,
       }).toString(),
       {
@@ -146,9 +130,6 @@ console.log("state" , state)
         },
       }
     );
-
-    // Delete used state
-    delete sessionStore[state];
 
     return res.json({
       success: 1,
@@ -164,6 +145,12 @@ console.log("state" , state)
     });
   }
 });
+
+
+/* ===============================
+   2️⃣ Exchange Code For Token
+=================================*/
+
 
 
 /* ===============================
