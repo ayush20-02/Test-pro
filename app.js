@@ -85,7 +85,6 @@ function generateCodeChallenge(verifier) {
 //   }
 // };
 
-
 app.get("/auth-url", async (req, res) => {
   try {
     const state = crypto.randomBytes(16).toString("hex");
@@ -145,11 +144,6 @@ app.post("/exchange", async (req, res) => {
     });
   }
 });
-
-
-/* ===============================
-   2️⃣ Exchange Code For Token
-=================================*/
 
 
 
