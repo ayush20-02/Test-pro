@@ -1,20 +1,9 @@
 const express = require("express");
 const crypto = require("crypto");
-const cors = require("cors");   // ✅ added
 require("dotenv").config();
 const axios = require("axios");
 
 const app = express();
-
-/* ===============================
-   CORS Configuration
-=================================*/
-app.use(cors({
-  origin: "*",
-  methods: "*",
-  allowedHeaders: "*",
-}));
-
 app.use(express.json());
 
 /* ===============================
@@ -27,6 +16,11 @@ function base64UrlEncode(buffer) {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+function base64UrlDecode(str) {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(str, "base64").toString();
 }
 
 function generateCodeVerifier() {
@@ -43,24 +37,19 @@ function generateCodeChallenge(verifier) {
 =================================*/
 const sessionStore = {};
 
+
 app.get("/auth-url", async (req, res) => {
   try {
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = crypto.randomBytes(16).toString("hex");
-
-    sessionStore[state] = codeVerifier;
 
     const authUrl =
       `${process.env.AUTH_URL}?response_type=code` +
       `&client_id=${process.env.CMIC_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
       `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
-      `&state=${state}` +
-      `&code_challenge=${codeChallenge}` +
-      `&code_challenge_method=S256`;
+      `&state=${state}`;
 
-    res.json({ authUrl, state });
+    res.json({ authUrl , state });
 
   } catch (err) {
     console.error(err);
@@ -70,6 +59,7 @@ app.get("/auth-url", async (req, res) => {
     });
   }
 });
+
 
 /* ===============================
    2️⃣ Exchange Code For Token
@@ -82,8 +72,7 @@ app.post("/exchange", async (req, res) => {
     if (!code) {
       return res.status(400).json({ error: "Authorization code required" });
     }
-
-    const tokenResponse = await axios.post(
+ const tokenResponse = await axios.post(
       process.env.CMIC_TOKEN_URL,
       new URLSearchParams({
         grant_type: "authorization_code",
@@ -101,6 +90,10 @@ app.post("/exchange", async (req, res) => {
 
     const tokenData = tokenResponse.data;
 
+    if (!tokenResponse.ok) {
+      return res.status(400).json(tokenData);
+    }
+
     res.json(tokenData);
 
   } catch (err) {
@@ -108,6 +101,7 @@ app.post("/exchange", async (req, res) => {
     res.status(500).json({ error: "Token exchange failed" });
   }
 });
+
 
 /* ===============================
    Start Server
