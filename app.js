@@ -81,12 +81,13 @@ app.post("/exchange", async (req, res) => {
     if (!code) {
       return res.status(400).json({ error: "Authorization code required" });
     }
- const tokenResponse = await axios.post(
+
+    const tokenResponse = await axios.post(
       process.env.CMIC_TOKEN_URL,
       new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
-        client_secret: process.env.CMIC_CLIENT_SECRET, // REQUIRED
+        client_secret: process.env.CMIC_CLIENT_SECRET,
         code,
         redirect_uri: process.env.CMIC_REDIRECT_URI,
       }),
@@ -97,17 +98,14 @@ app.post("/exchange", async (req, res) => {
       }
     );
 
-    const tokenData = tokenResponse.data;
-
-    if (!tokenResponse.ok) {
-      return res.status(400).json(tokenData);
-    }
-
-    res.json(tokenData);
+    res.json(tokenResponse.data);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Token exchange failed" });
+    console.error(err.response?.data || err.message);
+
+    res.status(err.response?.status || 500).json(
+      err.response?.data || { error: "Token exchange failed" }
+    );
   }
 });
 
