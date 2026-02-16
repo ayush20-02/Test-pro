@@ -2,9 +2,18 @@ const express = require("express");
 const crypto = require("crypto");
 require("dotenv").config();
 const axios = require("axios");
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
+
+app.use(cors({
+  origin: "*",
+  methods: "*",
+  allowedHeaders: "*",
+}));
+
+
 
 /* ===============================
    Helpers
