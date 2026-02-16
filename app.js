@@ -39,16 +39,23 @@ const sessionStore = {};
 
 app.get("/auth-url", async (req, res) => {
   try {
-    const state = crypto.randomBytes(16).toString("hex");
+   const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = crypto.randomBytes(16).toString("hex");
 
-    const authUrl =
-      `${process.env.AUTH_URL}?response_type=code` +
-      `&client_id=${process.env.CMIC_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
-      `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
-      `&state=${state}`;
+  // Store codeVerifier against state
+  sessionStore[state] = codeVerifier;
 
-    res.json({ authUrl });
+  const authUrl =
+    `${process.env.AUTH_URL}?response_type=code` +
+    `&client_id=${process.env.CMIC_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
+    `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
+    `&state=${state}` +
+    `&code_challenge=${codeChallenge}` +
+    `&code_challenge_method=S256`;
+
+  res.json({ authUrl, state });
 
   } catch (err) {
     console.error(err);
@@ -65,34 +72,35 @@ app.get("/auth-url", async (req, res) => {
 =================================*/
 
 app.post("/exchange", async (req, res) => {
+ const { code, state } = req.body;
+
+  const codeVerifier = sessionStore[state];
+  if (!codeVerifier) return res.status(400).json({ error: "Invalid state or expired" });
+
   try {
-    const { code } = req.body;
-
-    if (!code) {
-      return res.status(400).json({ error: "Authorization code required" });
-    }
-
     const tokenResponse = await fetch(process.env.CMIC_TOKEN_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
-        client_secret: process.env.CMIC_CLIENT_SECRET, // REQUIRED
+        // client_secret: process.env.CMIC_CLIENT_SECRET,
         code,
+        code_verifier: codeVerifier,
         redirect_uri: process.env.CMIC_REDIRECT_URI,
       }),
     });
 
     const tokenData = await tokenResponse.json();
 
-    if (!tokenResponse.ok) {
-      return res.status(400).json(tokenData);
-    }
+    // Delete used state
+    delete sessionStore[state];
 
-    res.json(tokenData);
+    // res.json(tokenData);
+    res.json({
+  success: 1,
+  data: tokenData,
+});
 
   } catch (err) {
     console.error(err);
