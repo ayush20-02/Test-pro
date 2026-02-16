@@ -75,32 +75,32 @@ app.get("/auth-url", async (req, res) => {
 =================================*/
 
 app.post("/exchange", async (req, res) => {
-  const { code, state } = req.body;
-
-  const codeVerifier = sessionStore[state];
-  if (!codeVerifier) return res.status(400).json({ error: "Invalid state or expired" });
-
   try {
-    const tokenResponse = await fetch(process.env.CMIC_TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: "Authorization code required" });
+    }
+
+    const tokenResponse = await axios.post(
+      process.env.CMIC_TOKEN_URL,
+      new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
+        client_secret: process.env.CMIC_CLIENT_SECRET, // REQUIRED
         code,
-        code_verifier: codeVerifier,
         redirect_uri: process.env.CMIC_REDIRECT_URI,
       }),
-    });
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
-    const tokenData = await tokenResponse.json();
+    const tokenData = tokenResponse.data;
 
-    delete sessionStore[state];
-
-    res.json({
-      success: 1,
-      data: tokenData,
-    });
+    res.json(tokenData);
 
   } catch (err) {
     console.error(err);
