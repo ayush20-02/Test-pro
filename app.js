@@ -1,8 +1,19 @@
 const express = require("express");
 const crypto = require("crypto");
+const cors = require("cors");   // ✅ added
 require("dotenv").config();
 
 const app = express();
+
+/* ===============================
+   CORS Configuration
+=================================*/
+app.use(cors({
+  origin: "*",
+  methods: "*",
+  allowedHeaders: "*",
+}));
+
 app.use(express.json());
 
 /* ===============================
@@ -15,11 +26,6 @@ function base64UrlEncode(buffer) {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-}
-
-function base64UrlDecode(str) {
-  str = str.replace(/-/g, "+").replace(/_/g, "/");
-  return Buffer.from(str, "base64").toString();
 }
 
 function generateCodeVerifier() {
@@ -36,26 +42,24 @@ function generateCodeChallenge(verifier) {
 =================================*/
 const sessionStore = {};
 
-
 app.get("/auth-url", async (req, res) => {
   try {
-   const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = crypto.randomBytes(16).toString("hex");
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = crypto.randomBytes(16).toString("hex");
 
-  // Store codeVerifier against state
-  sessionStore[state] = codeVerifier;
+    sessionStore[state] = codeVerifier;
 
-  const authUrl =
-    `${process.env.AUTH_URL}?response_type=code` +
-    `&client_id=${process.env.CMIC_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
-    `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
-    `&state=${state}` +
-    `&code_challenge=${codeChallenge}` +
-    `&code_challenge_method=S256`;
+    const authUrl =
+      `${process.env.AUTH_URL}?response_type=code` +
+      `&client_id=${process.env.CMIC_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(process.env.CMIC_REDIRECT_URI)}` +
+      `&scope=${encodeURIComponent(process.env.CMIC_SCOPE)}` +
+      `&state=${state}` +
+      `&code_challenge=${codeChallenge}` +
+      `&code_challenge_method=S256`;
 
-  res.json({ authUrl, state });
+    res.json({ authUrl, state });
 
   } catch (err) {
     console.error(err);
@@ -66,13 +70,12 @@ app.get("/auth-url", async (req, res) => {
   }
 });
 
-
 /* ===============================
    2️⃣ Exchange Code For Token
 =================================*/
 
 app.post("/exchange", async (req, res) => {
- const { code, state } = req.body;
+  const { code, state } = req.body;
 
   const codeVerifier = sessionStore[state];
   if (!codeVerifier) return res.status(400).json({ error: "Invalid state or expired" });
@@ -84,7 +87,6 @@ app.post("/exchange", async (req, res) => {
       body: new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
-        // client_secret: process.env.CMIC_CLIENT_SECRET,
         code,
         code_verifier: codeVerifier,
         redirect_uri: process.env.CMIC_REDIRECT_URI,
@@ -93,21 +95,18 @@ app.post("/exchange", async (req, res) => {
 
     const tokenData = await tokenResponse.json();
 
-    // Delete used state
     delete sessionStore[state];
 
-    // res.json(tokenData);
     res.json({
-  success: 1,
-  data: tokenData,
-});
+      success: 1,
+      data: tokenData,
+    });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Token exchange failed" });
   }
 });
-
 
 /* ===============================
    Start Server
