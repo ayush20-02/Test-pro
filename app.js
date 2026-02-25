@@ -76,17 +76,26 @@ app.get("/auth-url", async (req, res) => {
 
 app.post("/exchange", async (req, res) => {
   try {
+    console.log("----- /exchange API called -----");
+
     const { code } = req.body;
 
     if (!code) {
-      return res.status(400).json({ error: "Authorization code required" });
+      console.log("Authorization code missing");
+      return res.status(400).json({
+        success: 0,
+        message: "Authorization code required",
+      });
     }
- const tokenResponse = await axios.post(
+
+    console.log("Exchanging code for token...");
+
+    const tokenResponse = await axios.post(
       process.env.CMIC_TOKEN_URL,
       new URLSearchParams({
         grant_type: "authorization_code",
         client_id: process.env.CMIC_CLIENT_ID,
-        client_secret: process.env.CMIC_CLIENT_SECRET, // REQUIRED
+        client_secret: process.env.CMIC_CLIENT_SECRET,
         code,
         redirect_uri: process.env.CMIC_REDIRECT_URI,
       }),
@@ -97,24 +106,61 @@ app.post("/exchange", async (req, res) => {
       }
     );
 
-    const tokenData = tokenResponse.data;
+    console.log("Token response received");
 
-    if (tokenResponse.
-status != 200) {
-      return res.status(400).json(tokenData);
+    if (tokenResponse.status !== 200) {
+      console.log("Token exchange failed with status:", tokenResponse.status);
+
+      return res.status(tokenResponse.status).json({
+        success: 0,
+        message: "Token exchange failed",
+        data: tokenResponse.data,
+      });
     }
 
-      res.json({
-  success: 1,
-  data: tokenData,
-});
+    console.log("Token exchange success");
+
+    return res.status(200).json({
+      success: 1,
+      message: "Token exchanged successfully",
+      data: tokenResponse.data,
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Token exchange failed" });
+    console.error("Token exchange error:");
+
+    if (err.response) {
+      // API returned error response (400, 401, etc.)
+      console.error("Status:", err.response.status);
+      console.error("Data:", err.response.data);
+
+      return res.status(err.response.status).json({
+        success: 0,
+        message: "OAuth server error",
+        error: err.response.data,
+      });
+    }
+
+    if (err.request) {
+      // No response received
+      console.error("No response received:", err.request);
+
+      return res.status(500).json({
+        success: 0,
+        message: "No response received from OAuth server",
+      });
+    }
+
+    // Other errors
+    console.error("Error message:", err.message);
+
+    return res.status(500).json({
+      success: 0,
+      message: "Token exchange failed",
+      error: err.message,
+    });
   }
 });
-
 /* ===============================
    Start Server
 =================================*/
